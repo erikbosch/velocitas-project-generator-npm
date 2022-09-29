@@ -1,0 +1,48 @@
+---
+excludes:
+  scopes:
+  - pattern: "devDependencies"
+    reason: "DEV_DEPENDENCY_OF"
+    comment: "Packages for development only."
+package_configurations:
+- id: "NPM::typescript:4.8.3"
+  source_artifact_url: "https://registry.npmjs.org/typescript/-/typescript-4.8.3.tgz"
+  license_finding_curations:
+  - path: "package/ThirdPartyNoticeText.txt"
+    start_lines: "125"
+    line_count: 1
+    detected_license: "LicenseRef-scancode-cve-tou"
+    concluded_license: "Apache-2.0"
+    reason: "INCORRECT"
+    comment: "Found in ThirdPartyNoticeText file in Packages for development only."
+  - path: "package/ThirdPartyNoticeText.txt"
+    start_lines: "172"
+    line_count: 18
+    detected_license: "LicenseRef-scancode-khronos"
+    concluded_license: "Apache-2.0"
+    reason: "INCORRECT"
+    comment: "Found in ThirdPartyNoticeText file in Packages for development only."
+  - path: "package/ThirdPartyNoticeText.txt"
+    start_lines: "86"
+    line_count: 14
+    detected_license: "W3C-20150513"
+    concluded_license: "Apache-2.0"
+    reason: "INCORRECT"
+    comment: "Found in ThirdPartyNoticeText file in Packages for development only."
+resolutions:
+  rule_violations:
+    - message: "License Apache-2.0 found in project 'NPM:@eclipse-velocitas:velocitas-project-generator.*"
+      reason: "EXAMPLE_OF_EXCEPTION"
+      comment: "Lincense found is the used license which we document in the package.json"
+  vulnerabilities:
+  # NPM::flat:5.0.2
+  - id: "sonatype-2020-0889"
+    reason: "INEFFECTIVE_VULNERABILITY"
+    comment: "Packages for development only."
+  # NPM::mocha:10.0.0
+  - id: "sonatype-2021-1683"
+    reason: "INEFFECTIVE_VULNERABILITY"
+    comment: "Packages for development only."
+  - id: "sonatype-2021-4946"
+    reason: "INEFFECTIVE_VULNERABILITY"
+    comment: "Packages for development only."
