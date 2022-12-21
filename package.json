@@ -1,6 +1,6 @@
 {
   "name": "@eclipse-velocitas/velocitas-project-generator",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "repository": {
     "type": "git",
     "url": "https://github.com/eclipse-velocitas/velocitas-project-generator-npm.git"
@@ -13,7 +13,7 @@
   ],
   "scripts": {
     "build": "tsc",
-    "test": "mocha --reporter spec --require ts-node/register src/**/*.test.ts"
+    "test": "mocha --timeout 10000 --reporter spec --require ts-node/register src/**/*.test.ts"
   },
   "author": "",
   "license": "Apache-2.0",

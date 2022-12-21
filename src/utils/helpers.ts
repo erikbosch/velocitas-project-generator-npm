@@ -35,6 +35,7 @@ export const removeEmptyLines = (array: string[]): string[] => {
             if (
                 !array[index + 2].includes(PYTHON.CLASS) &&
                 !array[index + 2].includes(VELOCITAS.EVENT_LOOP) &&
+                !array[index + 2].includes(VELOCITAS.NEW_EVENT_LOOP) &&
                 !array[index + 2].includes(VELOCITAS.MAIN_METHOD)
             ) {
                 indexesToRemove.add(index);
@@ -52,4 +53,8 @@ export const insertClassDocString = (array: string[], appName: string): void => 
         0,
         indentCodeSnippet(`"""Velocitas App for ${appName}."""`, INDENTATION.COUNT_CLASS)
     );
+};
+
+export const delay = (ms: number) => {
+    return new Promise((resolve) => setTimeout(resolve, ms));
 };
