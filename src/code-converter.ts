@@ -12,7 +12,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import { Buffer } from 'buffer';
 import { CreateCodeSnippetForTemplateStep } from './pipeline/create-code-snippet';
 import { ExtractClassesStep } from './pipeline/extract-classes';
 import { ExtractImportsStep } from './pipeline/extract-imports';
@@ -21,8 +20,7 @@ import { ExtractVariablesStep } from './pipeline/extract-variables';
 import { IPipelineStep } from './pipeline/pipeline-base';
 import { PrepareCodeSnippetStep } from './pipeline/prepare-code-snippet';
 
-import { DIGITAL_AUTO, INDENTATION, PYTHON, VELOCITAS } from './utils/codeConstants';
-import { CONTENT_ENCODINGS } from './utils/constants';
+import { DIGITAL_AUTO, PYTHON, VELOCITAS } from './utils/codeConstants';
 import { REGEX } from './utils/regex';
 import {
     createArrayFromMultilineString,
@@ -57,32 +55,20 @@ export class CodeConverter {
 
     /**
      * Converts main.py from digital.auto to velocitas structure.
-     * @param {string} base64MainPyContentData
-     * @param {string} base64CodeSnippet
+     * @param {string} mainPyContentData
+     * @param {string} codeSnippet
      * @param {string} appName
-     * @return {string} encodedNewMainPy
+     * @return {string} finalizedMainPy
      * @public
      */
-    public convertMainPy(base64MainPyContentData: string, base64CodeSnippet: string, appName: string): string {
+    public convertMainPy(mainPyContentData: string, codeSnippet: string, appName: string): string {
         try {
             this.codeContext.appName = appName;
-            const decodedBase64CodeSnippet = Buffer.from(base64CodeSnippet, CONTENT_ENCODINGS.base64 as BufferEncoding).toString(
-                CONTENT_ENCODINGS.utf8 as BufferEncoding
-            );
-            this.adaptCodeSnippet(decodedBase64CodeSnippet);
-
-            const decodedMainPyContentData = Buffer.from(base64MainPyContentData, CONTENT_ENCODINGS.base64 as BufferEncoding).toString(
-                CONTENT_ENCODINGS.utf8 as BufferEncoding
-            );
-            const extractedMainPyStructure = this.extractMainPyBaseStructure(decodedMainPyContentData);
-
+            this.adaptCodeSnippet(codeSnippet);
+            const extractedMainPyStructure = this.extractMainPyBaseStructure(mainPyContentData);
             const convertedMainPy = this.addCodeSnippetToMainPy(extractedMainPyStructure);
-
             const finalizedMainPy = this.finalizeMainPy(convertedMainPy);
-            const encodedNewMainPy = Buffer.from(finalizedMainPy, CONTENT_ENCODINGS.utf8 as BufferEncoding).toString(
-                CONTENT_ENCODINGS.base64 as BufferEncoding
-            );
-            return encodedNewMainPy;
+            return finalizedMainPy;
         } catch (error) {
             throw error;
         }
@@ -107,22 +93,18 @@ export class CodeConverter {
         try {
             let tempContent: string | string[];
             tempContent = createArrayFromMultilineString(mainPyContentData);
-            tempContent = tempContent.filter((line) => {
-                if (line.includes(` ${PYTHON.COMMENT} `) && !line.includes(VELOCITAS.TYPE_IGNORE)) {
-                    return false;
-                }
-                if (!line.includes(VELOCITAS.PREDEFINED_TOPIC)) {
-                    return true;
-                }
-            });
+            tempContent = tempContent.filter((line) => !line.includes(` ${PYTHON.COMMENT} `) || line.includes(VELOCITAS.TYPE_IGNORE));
+            tempContent = tempContent.filter((line) => !line.includes(VELOCITAS.PREDEFINED_TOPIC));
 
             const classesArray = createArrayFromMultilineString(this.codeContext.seperateClasses);
+            const velocitasClassStartIndex = tempContent.indexOf('class SampleApp(VehicleApp):');
             if (classesArray.length > 0) {
-                tempContent.splice(tempContent.indexOf('class SampleApp(VehicleApp):') - 1, 0, ...classesArray);
+                tempContent.splice(velocitasClassStartIndex - 1, 0, ...classesArray);
             }
-
-            const topPartOfTemplate = tempContent.slice(0, tempContent.indexOf(`    ${VELOCITAS.ON_START}`) + 1);
-            const bottomPartOfTemplate = tempContent.slice(tempContent.indexOf(VELOCITAS.MAIN_METHOD) - 1, tempContent.length);
+            const velocitasOnStartIndex = tempContent.indexOf(`    ${VELOCITAS.ON_START}`);
+            const topPartOfTemplate = tempContent.slice(0, velocitasOnStartIndex + 1);
+            const velocitasMainIndex = tempContent.indexOf(VELOCITAS.MAIN_METHOD);
+            const bottomPartOfTemplate = tempContent.slice(velocitasMainIndex - 1, tempContent.length);
             const methodsArray = createArrayFromMultilineString(this.codeContext.seperateMethods);
             if (methodsArray.length > 1) {
                 methodsArray.unshift('');
@@ -156,35 +138,40 @@ export class CodeConverter {
     }
 
     private finalizeMainPy(newMainPy: string): string {
-        let finalCode: string | string[];
-        finalCode = createArrayFromMultilineString(newMainPy);
+        let finalCode: string | string[] = createArrayFromMultilineString(newMainPy);
         this.adaptToMqtt(finalCode);
         const firstLineOfImport = finalCode.find((element: string) => element.includes(PYTHON.IMPORT));
+        (finalCode as string[]).splice(finalCode.indexOf(firstLineOfImport as string), 0, '# flake8: noqa: E501,B950 line too long');
+
         this.codeContext.basicImportsArray?.forEach((basicImportString: string) => {
             if (basicImportString != DIGITAL_AUTO.IMPORT_PLUGINS) {
                 (finalCode as string[]).splice(finalCode.indexOf(firstLineOfImport as string), 0, basicImportString);
             }
         });
         finalCode = createMultilineStringFromArray(finalCode);
-        const tempCode = finalCode
+        finalCode = finalCode
             .replace(REGEX.FIND_SUBSCRIBE_METHOD_CALL, VELOCITAS.SUBSCRIPTION_SIGNATURE)
             .replace(/await await/gm, `${PYTHON.AWAIT}`)
             .replace(/\.get\(\)/gm, `${VELOCITAS.GET_VALUE}`)
             .replace(REGEX.GET_EVERY_PLUGINS_USAGE, '')
             .replace(/await aio/gm, VELOCITAS.ASYNCIO);
 
-        finalCode = createArrayFromMultilineString(tempCode);
+        finalCode = createArrayFromMultilineString(finalCode);
         finalCode = removeEmptyLines(finalCode);
         finalCode.forEach((codeLine: string, index) => {
             if (codeLine.includes(VELOCITAS.GET_VALUE)) {
-                if (codeLine.includes('{await')) {
-                    (finalCode as string[])[index] = codeLine.replace(/{await/, '{(await');
-                } else {
-                    (finalCode as string[])[index] = codeLine.replace(/await/, '(await');
-                }
+                (finalCode as string[])[index] = codeLine.replace(/await/, '(await').replace(/{await/, '{(await');
             }
             if (codeLine.includes(VELOCITAS.INFO_LOGGER_SIGNATURE) && codeLine.includes('",')) {
                 (finalCode as string[])[index] = codeLine.replace('",', ': %s",');
+            }
+            if (codeLine.includes('.set(')) {
+                const setArgument = codeLine.split('(')[1];
+                if (setArgument.startsWith('self.Vehicle')) {
+                    const vehicleClassEnumProperty = setArgument.split(')')[0];
+                    const identifiedEnumString = vehicleClassEnumProperty.split('.').at(-1);
+                    (finalCode as string[])[index] = codeLine.replace(vehicleClassEnumProperty, `"${identifiedEnumString}"`);
+                }
             }
         });
         if (!finalCode.some((line: string) => line.includes(VELOCITAS.CLASS_METHOD_SIGNATURE))) {
@@ -197,11 +184,9 @@ export class CodeConverter {
     }
 
     private adaptToMqtt(mainPyStringArray: string[]) {
-        const setTextLines: string[] = mainPyStringArray.filter(
-            (line) => line.includes(DIGITAL_AUTO.NOTIFY) || line.includes(DIGITAL_AUTO.SET_TEXT)
-        );
-        setTextLines.forEach((setTextLine: string) => {
-            let mqttTopic: string;
+        const setTextLines = mainPyStringArray.filter((line) => line.includes(DIGITAL_AUTO.NOTIFY) || line.includes(DIGITAL_AUTO.SET_TEXT));
+        for (const setTextLine of setTextLines) {
+            let mqttTopic;
             if (setTextLine.includes(DIGITAL_AUTO.NOTIFY)) {
                 mqttTopic = setTextLine.split('.')[1].split('(')[0].trim();
             } else {
@@ -213,19 +198,32 @@ export class CodeConverter {
             const spaceCountBeforeSetTextLine = setTextLine.length - setTextLine.replace(spacesBeforeSetTextLine, '').length;
             const newMqttPublishLine = indentCodeSnippet(mqttPublishLine, spaceCountBeforeSetTextLine);
             mainPyStringArray[mainPyStringArray.indexOf(setTextLine)] = newMqttPublishLine;
-        });
+        }
         return mainPyStringArray;
     }
 
     private transformToMqttPublish(mqttTopic: string, mqttMessage: string): string {
-        let mqttPublish: string = `await self.publish_mqtt_event("${mqttTopic}", json.dumps({"result": {"message": """${mqttMessage}"""}}))`;
         if (mqttMessage.includes('{')) {
-            const variableInMqttMessage = this.codeContext.variableNames.find((variable: string) => mqttMessage.includes(variable));
+            const variableInMqttMessage = this.codeContext.variableNames.find((variable) => mqttMessage.includes(variable));
             if (variableInMqttMessage) {
                 mqttMessage = mqttMessage.replace(variableInMqttMessage, `self.${variableInMqttMessage}`);
             }
-            mqttPublish = `await self.publish_mqtt_event("${mqttTopic}", json.dumps({"result": {"message": f"""${mqttMessage}"""}}))`;
         }
-        return mqttPublish;
+        return this.generateMqttPublishString(mqttMessage, mqttTopic);
+    }
+
+    private generateMqttPublishString(mqttMessage: string, mqttTopic: string) {
+        const quoteType = mqttMessage.includes('{') ? `f"""` : `"""`;
+        let jsonDumpsObject = `json.dumps({"result": {"message": ${quoteType}${mqttMessage}"""}}),\n)`;
+        let mqttPublishString: string = `await self.publish_mqtt_event(\n${' '.repeat(4)}"${mqttTopic}",\n${' '.repeat(
+            4
+        )}${jsonDumpsObject}`;
+        if (jsonDumpsObject.length > 88) {
+            jsonDumpsObject = `json.dumps(\n${' '.repeat(8)}{\n${' '.repeat(12)}"result": {\n${' '.repeat(
+                16
+            )}"message": ${quoteType}${mqttMessage}"""\n${' '.repeat(12)}}\n${' '.repeat(8)}}\n${' '.repeat(4)}),\n)`;
+            mqttPublishString = `await self.publish_mqtt_event(\n${' '.repeat(4)}"${mqttTopic}",\n${' '.repeat(4)}${jsonDumpsObject}`;
+        }
+        return mqttPublishString;
     }
 }

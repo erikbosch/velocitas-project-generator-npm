@@ -36,7 +36,7 @@ npm link path/to/velocitas-project-generator-npm
 import { ProjectGenerator } from "@eclipse-velocitas/velocitas-project-generator";
 
 const generator = new ProjectGenerator(OWNER, REPO, TOKEN);
-await generator.run(BASE64_CODE_SNIPPET, APP_NAME);
+await generator.runWithPayload(BASE64_CODE_SNIPPET, APP_NAME, BASE64_VSPEC_PAYLOAD);
 ```
 
 ## Contribution

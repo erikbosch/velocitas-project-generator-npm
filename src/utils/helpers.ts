@@ -1,4 +1,5 @@
 import { INDENTATION, PYTHON, VELOCITAS } from './codeConstants';
+import { CONTENT_ENCODINGS } from './constants';
 import { REGEX } from './regex';
 
 export const indentCodeSnippet = (decodedSnippet: string, indentCount: number): string => {
@@ -41,8 +42,15 @@ export const removeEmptyLines = (array: string[]): string[] => {
                 indexesToRemove.add(index);
             }
         }
+        if (e === VELOCITAS.MAIN_METHOD && array[index + 1] === '') {
+            indexesToRemove.add(index + 1);
+        }
     });
     const arrayWithoutEmtpyLines = array.filter((_element, index) => !indexesToRemove.has(index));
+    const indexOfOnStart = arrayWithoutEmtpyLines.indexOf(`${' '.repeat(4)}${VELOCITAS.ON_START}`);
+    if (arrayWithoutEmtpyLines[indexOfOnStart + 1] === '') {
+        arrayWithoutEmtpyLines.splice(indexOfOnStart + 1, 1);
+    }
     return arrayWithoutEmtpyLines;
 };
 
@@ -58,3 +66,8 @@ export const insertClassDocString = (array: string[], appName: string): void => 
 export const delay = (ms: number) => {
     return new Promise((resolve) => setTimeout(resolve, ms));
 };
+
+export const decode = (string: string) =>
+    Buffer.from(string, CONTENT_ENCODINGS.base64 as BufferEncoding).toString(CONTENT_ENCODINGS.utf8 as BufferEncoding);
+export const encode = (string: string) =>
+    Buffer.from(string, CONTENT_ENCODINGS.utf8 as BufferEncoding).toString(CONTENT_ENCODINGS.base64 as BufferEncoding);
