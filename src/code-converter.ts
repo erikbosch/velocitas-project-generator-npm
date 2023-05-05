@@ -23,6 +23,7 @@ import { PrepareCodeSnippetStep } from './pipeline/prepare-code-snippet';
 import { DIGITAL_AUTO, PYTHON, VELOCITAS } from './utils/codeConstants';
 import { REGEX } from './utils/regex';
 import {
+    DataPointDefinition,
     createArrayFromMultilineString,
     createMultilineStringFromArray,
     indentCodeSnippet,
@@ -45,6 +46,18 @@ export class CodeContext {
 }
 
 /**
+ * Result of code conversion containing finalizedMainPy as string and
+ * an array of DataPointDefinition
+ * @type CodeConversionResult
+ * @prop {string} finalizedMainPy Finalized main.py.
+ * @prop {DataPointDefinition[]} dataPoints Array of datapoints for AppManifest.json.
+ */
+export interface CodeConversionResult {
+    finalizedMainPy: string;
+    dataPoints: DataPointDefinition[];
+}
+
+/**
  * Initialize a new `CodeConverter`.
  *
  * @return {CodeConverter} which is used to convert digital.auto prototype to a functioning velocitas structure.
@@ -58,17 +71,18 @@ export class CodeConverter {
      * @param {string} mainPyContentData
      * @param {string} codeSnippet
      * @param {string} appName
-     * @return {string} finalizedMainPy
+     * @return {CodeConversionResult} Result of code conversion.
      * @public
      */
-    public convertMainPy(mainPyContentData: string, codeSnippet: string, appName: string): string {
+    public convertMainPy(mainPyContentData: string, codeSnippet: string, appName: string): CodeConversionResult {
         try {
             this.codeContext.appName = appName;
             this.adaptCodeSnippet(codeSnippet);
             const extractedMainPyStructure = this.extractMainPyBaseStructure(mainPyContentData);
             const convertedMainPy = this.addCodeSnippetToMainPy(extractedMainPyStructure);
             const finalizedMainPy = this.finalizeMainPy(convertedMainPy);
-            return finalizedMainPy;
+            const dataPoints = this.identifyDatapoints(finalizedMainPy);
+            return { finalizedMainPy: finalizedMainPy, dataPoints: dataPoints };
         } catch (error) {
             throw error;
         }
@@ -225,5 +239,35 @@ export class CodeConverter {
             mqttPublishString = `await self.publish_mqtt_event(\n${' '.repeat(4)}"${mqttTopic}",\n${' '.repeat(4)}${jsonDumpsObject}`;
         }
         return mqttPublishString;
+    }
+
+    private identifyDatapoints(finalizedMainPy: string): DataPointDefinition[] {
+        const finalizedMainPyArray = createArrayFromMultilineString(finalizedMainPy);
+        const dataPointsMap = new Map();
+        const dataPoints: DataPointDefinition[] = [];
+        finalizedMainPyArray.forEach((line: string) => {
+            if (line.includes('.Vehicle.')) {
+                const captureAlternatives = '\\.subscribe|\\.get|\\.set|\\)';
+                const dataPointRegExp = new RegExp(`Vehicle.*?(${captureAlternatives})`);
+                const dataPointMatch = dataPointRegExp.exec(line);
+                if (dataPointMatch) {
+                    const dataPointPath = dataPointMatch[0].split(dataPointMatch[1])[0];
+                    switch (dataPointMatch[1]) {
+                        case '.set':
+                            dataPointsMap.set(dataPointPath, 'write');
+                            break;
+                        default:
+                            if (!dataPointsMap.has(dataPointPath)) {
+                                dataPointsMap.set(dataPointPath, 'read');
+                            }
+                            break;
+                    }
+                }
+            }
+        });
+        dataPointsMap.forEach((dataPointAccess: string, dataPointPath: string) =>
+            dataPoints.push({ path: dataPointPath, required: 'true', access: dataPointAccess })
+        );
+        return dataPoints;
     }
 }
