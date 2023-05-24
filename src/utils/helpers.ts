@@ -84,12 +84,8 @@ export interface VehicleModel {
     datapoints: DataPointDefinition[];
 }
 
-export interface NewAppManifest {
+export interface AppManifest {
     name: string;
     vehicleModel: VehicleModel;
     runtime: string[];
 }
-
-export const isNewAppManifest = (json: any): json is NewAppManifest[] => {
-    return typeof json.name === 'string' && typeof json.vehicleModel === 'object';
-};
