@@ -15,9 +15,10 @@
 import { StatusCodes } from 'http-status-codes';
 import { CodeConverter, CodeConversionResult } from './code-converter';
 import { MS_TO_WAIT_FOR_GITHUB, LOCAL_VSPEC_PATH, APP_MANIFEST_PATH, MAIN_PY_PATH } from './utils/constants';
-import { DataPointDefinition, AppManifest, decode, delay, encode } from './utils/helpers';
+import { decode, delay, encode } from './utils/helpers';
 import { GitRequestHandler } from './gitRequestHandler';
 import { VspecUriObject } from './utils/types';
+import { updateAppManifestContent } from './utils/appManifest';
 
 /**
  * Initialize a new `ProjectGenerator` with the given `options`.
@@ -105,15 +106,11 @@ export class ProjectGenerator {
         return convertedCode;
     }
 
-    private async getNewAppManifestSha(appName: string, vspecPath: string, dataPoints: DataPointDefinition[]): Promise<string> {
+    private async getNewAppManifestSha(appName: string, vspecPath: string, dataPoints: any[]): Promise<string> {
         const appManifestContentData = await this.gitRequestHandler.getFileContentData(APP_MANIFEST_PATH);
-        let decodedAppManifestContent: AppManifest[] = JSON.parse(decode(appManifestContentData));
-
-        decodedAppManifestContent[0].name = appName.toLowerCase();
-        decodedAppManifestContent[0].vehicleModel.src = vspecPath;
-        decodedAppManifestContent[0].vehicleModel.datapoints = dataPoints;
-
-        const encodedAppManifestContent = encode(`${JSON.stringify(decodedAppManifestContent, null, 4)}\n`);
+        let decodedAppManifestContent = JSON.parse(decode(appManifestContentData));
+        const updatedAppManifestContent = updateAppManifestContent(decodedAppManifestContent, appName, vspecPath, dataPoints);
+        const encodedAppManifestContent = encode(`${JSON.stringify(updatedAppManifestContent, null, 4)}\n`);
         const appManifestBlobSha = await this.gitRequestHandler.createBlob(encodedAppManifestContent);
         return appManifestBlobSha;
     }
